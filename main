@@ -9,9 +9,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $file = fopen("leads.txt", "a");
         fwrite($file, $email . "\n");
         fclose($file);
-        $message = "✅ Thank you! You are now subscribed.";
+        $message = "✅ Thank you! You are now subscribed";
     } else {
-        $message = "❌ Please enter a valid email.";
+        $message = "❌ Please enter a valid email";
     }
 }
 ?>
