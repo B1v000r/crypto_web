@@ -1,0 +1,122 @@
+<?php
+// Handle form submit
+$message = "";
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $email = filter_var(trim($_POST["email"]), FILTER_SANITIZE_EMAIL);
+
+    // RECAPTCHA CHECK
+    $recaptchaSecret = "YOUR_SECRET_KEY";
+    $recaptchaResponse = $_POST['g-recaptcha-response'];
+
+    $verify = file_get_contents(
+        "https://www.google.com/recaptcha/api/siteverify?secret={$recaptchaSecret}&response={$recaptchaResponse}"
+    );
+    $captchaSuccess = json_decode($verify);
+
+    if (!$captchaSuccess->success) {
+        $message = "❌ Please verify you are not a robot.";
+    } else {
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $file = fopen("leads.txt", "a");
+            fwrite($file, $email . "\n");
+            fclose($file);
+            $message = "✅ Thank you! You are now subscribed.";
+        } else {
+            $message = "❌ Please enter a valid email.";
+        }
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Crypto Insights - Stay Ahead in Web3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #0a0f24;
+        color: #fff;
+        margin: 0;
+        text-align: center;
+    }
+    header {
+        padding: 90px 20px;
+        background: linear-gradient(135deg, #0d47a1, #00acc1);
+    }
+    h1 {
+        font-size: 42px;
+        margin-bottom: 15px;
+    }
+    p {
+        font-size: 18px;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    form {
+        margin-top: 50px;
+    }
+    input[type="email"] {
+        padding: 12px;
+        width: 250px;
+        border: none;
+        border-radius: 4px;
+        outline: none;
+    }
+    button {
+        padding: 12px 18px;
+        border: none;
+        background: #ffcd00;
+        font-weight: bold;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-left: 5px;
+    }
+    button:hover {
+        background: #ffb300;
+    }
+    footer {
+        padding: 50px;
+        text-align: center;
+    }
+    .message {
+        margin-top: 15px;
+        font-size: 18px;
+    }
+</style>
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+</head>
+<body>
+
+<header>
+    <h1>Get Exclusive Crypto Insights</h1>
+    <p>Join our newsletter and stay ahead of the market with Web3 trends, DeFi strategies, and Bitcoin & altcoins analysis.</p>
+</header>
+
+<footer>
+    <h2>Subscribe to Our Crypto Newsletter</h2>
+
+    <form method="post" action="">
+        <input type="email" name="email" placeholder="Enter your email address" required>
+        
+        <div style="margin-top:15px;" 
+             class="g-recaptcha" 
+             data-sitekey="YOUR_SITE_KEY">
+        </div>
+
+        <button type="submit" style="margin-top:15px;">Subscribe</button>
+    </form>
+
+    <?php if (!empty($message)): ?>
+        <div class="message"><?= $message; ?></div>
+    <?php endif; ?>
+    
+    <p style="margin-top:20px; font-size:14px; opacity:.7;">
+        We respect your privacy. No spam ever.
+    </p>
+</footer>
+
+</body>
+</html>
