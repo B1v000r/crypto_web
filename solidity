@@ -1,0 +1,139 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+/// @title AntiBotGate — простой модуль защиты от ботов (POW + rate limit + oracle signature)
+/// @author
+/// @notice Пример для интеграции в dApp: перед выполнением "чувствительного" действия вызывайте require(isVerified(msg.sender))
+contract AntiBotGate {
+    // --- state ---
+    mapping(address => uint256) public lastVerifiedUntil; // until timestamp
+    mapping(address => uint256) public lastActionAt;      // rate-limit per address
+
+    address public admin;
+    address public trustedSigner; // оффчейн oracle, которому доверяем (опционально)
+    
+    uint256 public verificationTTL = 60 * 60; // 1 hour by default
+    uint8  public powLeadingZeroBits = 20;    // сложность POW: сколько ведущих нулевых бит требуется
+    uint256 public actionCooldown = 30;       // seconds between sensitive actions per address
+
+    event VerifiedByPOW(address indexed who, uint256 until, uint256 difficultyBits);
+    event VerifiedBySignature(address indexed who, uint256 until, address signer);
+    event ParamsUpdated(uint8 powBits, uint256 ttl, uint256 cooldown);
+    event TrustedSignerUpdated(address newSigner);
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    constructor(address _trustedSigner) {
+        admin = msg.sender;
+        trustedSigner = _trustedSigner;
+    }
+
+    // --- helpers / getters ---
+    /// @notice Проверяет — есть ли у адреса действующая верификация
+    function isVerified(address user) public view returns (bool) {
+        return lastVerifiedUntil[user] >= block.timestamp;
+    }
+
+    // --- POW verification ---
+    /// @notice Пользователь должен найти nonce: keccak256(abi.encodePacked(user, nonce, blockhash(block.number - 1))) имеет `powLeadingZeroBits` leading zero bits.
+    /// @param nonce число, найденное клиентом
+    function verifyPOW(uint256 nonce) external {
+        // Используем предыдущий хеш блока, чтобы сделать POW не полностью предсказуемым заранее
+        bytes32 prevHash = blockhash(block.number - 1);
+        bytes32 h = keccak256(abi.encodePacked(msg.sender, nonce, prevHash));
+
+        // Проверка ведущих нулевых битов: приведём bytes32 -> uint256 и сдвинем
+        uint256 num = uint256(h);
+
+        // Condition: верх (powLeadingZeroBits) битов равны нулю
+        // Equivalent: num >> (256 - powLeadingZeroBits) == 0
+        require((num >> (256 - powLeadingZeroBits)) == 0, "POW: insufficient difficulty");
+
+        // успех — даём верификацию
+        uint256 until = block.timestamp + verificationTTL;
+        lastVerifiedUntil[msg.sender] = until;
+
+        emit VerifiedByPOW(msg.sender, until, powLeadingZeroBits);
+    }
+
+    // --- Signature (oracle) verification ---
+    /// @notice Доверенная офф-чейн система может выдать подпись: signer signs keccak256(abi.encodePacked(user, expiryTimestamp, nonce))
+    /// @param user адрес пользователя (передаём для простоты проверки)
+    /// @param expiryTimestamp until timestamp (время истечения верификации)
+    /// @param nonce произвольный nonce (чтобы подпись нельзя было переиграть)
+    /// @param sig подпись (65 bytes)
+    function verifyBySignature(address user, uint256 expiryTimestamp, uint256 nonce, bytes calldata sig) external {
+        // reconstruct message
+        bytes32 message = keccak256(abi.encodePacked(user, expiryTimestamp, nonce, address(this)));
+        bytes32 ethSigned = toEthSignedMessageHash(message);
+
+        address recovered = recoverSigner(ethSigned, sig);
+        require(recovered == trustedSigner, "Invalid signer");
+
+        // Накладываем верхнюю границу: expiryTimestamp не должен быть дольше, чем сейчас + max ttl (защита)
+        // Но для простоты доверим значению и установим until = min(expiryTimestamp, block.timestamp + 30 days)
+        uint256 maxAllowed = block.timestamp + 30 days;
+        uint256 until = expiryTimestamp > maxAllowed ? maxAllowed : expiryTimestamp;
+
+        lastVerifiedUntil[user] = until;
+        emit VerifiedBySignature(user, until, recovered);
+    }
+
+    // --- Use guard for sensitive actions ---
+    /// @notice Пример функции "чувствительного" действия, защищённого от ботов
+    function performSensitiveAction() external {
+        require(isVerified(msg.sender), "Not verified as human");
+        require(block.timestamp - lastActionAt[msg.sender] >= actionCooldown, "Cooldown active");
+
+        // Выполнение действия...
+        lastActionAt[msg.sender] = block.timestamp;
+
+        // (можно добавить логику)
+    }
+
+    // --- admin setters ---
+    function setParams(uint8 _powBits, uint256 _ttlSeconds, uint256 _actionCooldown) external onlyAdmin {
+        powLeadingZeroBits = _powBits;
+        verificationTTL = _ttlSeconds;
+        actionCooldown = _actionCooldown;
+        emit ParamsUpdated(_powBits, _ttlSeconds, _actionCooldown);
+    }
+
+    function setTrustedSigner(address _signer) external onlyAdmin {
+        trustedSigner = _signer;
+        emit TrustedSignerUpdated(_signer);
+    }
+
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require(newAdmin != address(0), "zero");
+        admin = newAdmin;
+    }
+
+    // --- internal: ECDSA recover ---
+    function toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32) {
+        // EIP-191: "\x19Ethereum Signed Message:\n32" + hash
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
+    }
+
+    function recoverSigner(bytes32 ethSignedMessageHash, bytes memory sig) internal pure returns (address) {
+        require(sig.length == 65, "sig len");
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
+        }
+        // v should be 27 or 28
+        if (v < 27) {
+            v += 27;
+        }
+        require(v == 27 || v == 28, "bad v");
+        return ecrecover(ethSignedMessageHash, v, r, s);
+    }
+}
