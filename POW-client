@@ -1,0 +1,85 @@
+import { ethers } from "ethers";
+
+// ABI функции verifyPOW
+const contractABI = [
+    "function verifyPOW(uint256 nonce) public",
+    "function powLeadingZeroBits() public view returns (uint8)"
+];
+
+// --- НАСТРОЙКИ ---
+const CONTRACT_ADDRESS = "YOUR_CONTRACT_ADDRESS";  // ← поставьте адрес контракта
+const RPC_URL = "https://mainnet.infura.io/v3/YOUR_KEY"; // или любой RPC 
+// -----------------
+
+
+// POW helper: проверка ведущих нулевых битов
+function hasLeadingZeroBits(hashHex, bits) {
+    const hashBinary = BigInt(hashHex);
+    return (hashBinary >> BigInt(256 - bits)) === 0n;
+}
+
+// Основная функция POW-клиента
+export async function runPOW() {
+    console.log("Connecting to wallet...");
+
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const userAddress = await signer.getAddress();
+
+    console.log("User:", userAddress);
+
+    // RPC для получения blockhash
+    const rpcProvider = new ethers.JsonRpcProvider(RPC_URL);
+    const block = await rpcProvider.getBlock("latest");
+
+    const prevHash = block.parentHash;
+    console.log("Previous block hash:", prevHash);
+
+    // Подключаем контракт
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, signer);
+
+    const difficulty = await contract.powLeadingZeroBits();
+    console.log("Difficulty:", difficulty.toString(), "leading zero bits");
+
+    console.log("Starting POW... this may take some seconds.");
+
+    let nonce = 0n;
+    let hash;
+
+    // POW loop
+    while (true) {
+        // Вычисляем hash = keccak256(user, nonce, prevBlockHash)
+        const encoded = ethers.solidityPacked(
+            ["address", "uint256", "bytes32"],
+            [userAddress, nonce, prevHash]
+        );
+        hash = ethers.keccak256(encoded);
+
+        if (hasLeadingZeroBits(hash, difficulty)) break;
+
+        nonce++;
+
+        if (nonce % 100000n === 0n) {
+            console.log(`Checked ${nonce} nonces...`);
+        }
+    }
+
+    console.log("POW solved!");
+    console.log("Nonce:", nonce.toString());
+    console.log("Hash:", hash);
+
+    // Отправляем транзакцию в контракт
+    console.log("Sending verifyPOW transaction...");
+
+    const tx = await contract.verifyPOW(nonce);
+    const receipt = await tx.wait();
+
+    console.log("Verification success!");
+    console.log("TX:", receipt.hash);
+
+    return {
+        nonce: nonce.toString(),
+        hash,
+        txHash: receipt.hash
+    };
+}
