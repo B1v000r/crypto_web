@@ -1,0 +1,120 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+/// @title AntiBotGateWithRecaptcha — POW + signature oracle (recaptcha) + rate limit + replay-protection
+contract AntiBotGateWithRecaptcha {
+    mapping(address => uint256) public lastVerifiedUntil;
+    mapping(address => uint256) public lastActionAt;
+    mapping(uint256 => bool) public usedNonces; // replay protection for signed tokens
+
+    address public admin;
+    address public trustedSigner; // офф-чейн сервис, который подписывает recaptcha-проверки
+
+    uint256 public verificationTTL = 60 * 60; // default 1 hour
+    uint8  public powLeadingZeroBits = 20;
+    uint256 public actionCooldown = 30;
+
+    event VerifiedByPOW(address indexed who, uint256 until, uint256 difficultyBits);
+    event VerifiedBySignature(address indexed who, uint256 until, address signer, uint256 nonce);
+    event TrustedSignerUpdated(address newSigner);
+    event ParamsUpdated(uint8 powBits, uint256 ttl, uint256 cooldown);
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    constructor(address _trustedSigner) {
+        admin = msg.sender;
+        trustedSigner = _trustedSigner;
+    }
+
+    // --- view helpers ---
+    function isVerified(address user) public view returns (bool) {
+        return lastVerifiedUntil[user] >= block.timestamp;
+    }
+
+    // --- POW (как раньше) ---
+    function verifyPOW(uint256 nonce) external {
+        bytes32 prevHash = blockhash(block.number - 1);
+        bytes32 h = keccak256(abi.encodePacked(msg.sender, nonce, prevHash));
+        uint256 num = uint256(h);
+        require((num >> (256 - powLeadingZeroBits)) == 0, "POW: insufficient difficulty");
+
+        uint256 until = block.timestamp + verificationTTL;
+        lastVerifiedUntil[msg.sender] = until;
+        emit VerifiedByPOW(msg.sender, until, powLeadingZeroBits);
+    }
+
+    // --- signature-based verification (используется бэкендом после reCAPTCHA) ---
+    /// @notice Подпись должна быть выдана trustedSigner над хешем keccak256(user, expiryTimestamp, nonce, thisContract)
+    /// @param user адрес пользователя (обычно msg.sender у вызывающего)
+    /// @param expiryTimestamp время истечения верификации (unix)
+    /// @param nonce уникальный nonce, используется для защиты от replay
+    /// @param sig подпись (65 байт) сделанная trustedSigner
+    function verifyBySignature(address user, uint256 expiryTimestamp, uint256 nonce, bytes calldata sig) external {
+        require(!usedNonces[nonce], "Nonce used");
+        // form message hash (include this contract address to avoid re-use на другом контракте)
+        bytes32 message = keccak256(abi.encodePacked(user, expiryTimestamp, nonce, address(this)));
+        bytes32 ethSigned = toEthSignedMessageHash(message);
+
+        address recovered = recoverSigner(ethSigned, sig);
+        require(recovered == trustedSigner, "Invalid signer");
+
+        // ensure expiryTimestamp is not too far in future (optional policy)
+        uint256 maxAllowed = block.timestamp + 30 days;
+        uint256 until = expiryTimestamp > maxAllowed ? maxAllowed : expiryTimestamp;
+
+        // mark nonce used
+        usedNonces[nonce] = true;
+
+        lastVerifiedUntil[user] = until;
+        emit VerifiedBySignature(user, until, recovered, nonce);
+    }
+
+    // --- protected example action ---
+    function performSensitiveAction() external {
+        require(isVerified(msg.sender), "Not verified");
+        require(block.timestamp - lastActionAt[msg.sender] >= actionCooldown, "Cooldown active");
+        // action logic
+        lastActionAt[msg.sender] = block.timestamp;
+    }
+
+    // --- admin ---
+    function setParams(uint8 _powBits, uint256 _ttlSeconds, uint256 _actionCooldown) external onlyAdmin {
+        powLeadingZeroBits = _powBits;
+        verificationTTL = _ttlSeconds;
+        actionCooldown = _actionCooldown;
+        emit ParamsUpdated(_powBits, _ttlSeconds, _actionCooldown);
+    }
+
+    function setTrustedSigner(address _signer) external onlyAdmin {
+        trustedSigner = _signer;
+        emit TrustedSignerUpdated(_signer);
+    }
+
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require(newAdmin != address(0), "zero");
+        admin = newAdmin;
+    }
+
+    // --- ECDSA helpers ---
+    function toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
+    }
+
+    function recoverSigner(bytes32 ethSignedMessageHash, bytes memory sig) internal pure returns (address) {
+        require(sig.length == 65, "sig len");
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
+        }
+        if (v < 27) v += 27;
+        require(v == 27 || v == 28, "bad v");
+        return ecrecover(ethSignedMessageHash, v, r, s);
+    }
+}
