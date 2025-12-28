@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Web3 Human Verification</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="neon.css">
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+</head>
+<body>
+
+<div class="card">
+    <div class="font-big">
+        Human Verification
+    </div>
+
+    <p class="font-medium" style="margin-top:15px;">
+        Secure Web3 access requires proof that you are human.
+    </p>
+
+    <p class="font-small" style="margin-top:10px;">
+        We use reCAPTCHA and on-chain validation to block automated bots.
+    </p>
+
+    <!-- reCAPTCHA widget -->
+    <div style="margin-top:25px;">
+        <div class="g-recaptcha" data-sitekey="YOUR_SITE_KEY"></div>
+    </div>
+
+    <button class="button">
+        Verify & Continue
+    </button>
+
+    <!-- Example status messages -->
+    <!-- <div class="status-success">Verification successful</div> -->
+    <!-- <div class="status-error">Verification failed</div> -->
+</div>
+
+</body>
+</html>
