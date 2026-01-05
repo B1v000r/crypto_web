@@ -1,0 +1,87 @@
+import { useEffect, useState } from "react";
+import { ethers } from "ethers";
+import "./styles.css";
+import { CONTRACT_ABI, CONTRACT_ADDRESS, RECAPTCHA_SITE_KEY } from "./config";
+
+export default function App() {
+  const [account, setAccount] = useState(null);
+  const [status, setStatus] = useState("");
+
+  // Connect MetaMask
+  async function connectWallet() {
+    if (!window.ethereum) return alert("MetaMask not found");
+
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const accounts = await provider.send("eth_requestAccounts", []);
+    setAccount(accounts[0]);
+  }
+
+  // Run reCAPTCHA → backend → on-chain verification
+  async function verifyHuman() {
+    setStatus("Running reCAPTCHA...");
+
+    const token = await window.grecaptcha.execute(
+      RECAPTCHA_SITE_KEY,
+      { action: "verify" }
+    );
+
+    setStatus("Sending proof to backend...");
+
+    // Backend must return: expiryTimestamp, nonce, signature
+    const res = await fetch("http://localhost:3000/verify-recaptcha", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recaptchaToken: token, userAddress: account })
+    });
+
+    const data = await res.json();
+    if (!data.signature) {
+      setStatus("Verification failed");
+      return;
+    }
+
+    setStatus("Sending on-chain transaction...");
+
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+    const tx = await contract.verifyBySignature(
+      account,
+      data.expiryTimestamp,
+      data.nonce,
+      data.signature
+    );
+
+    await tx.wait();
+    setStatus("✅ Verified on-chain");
+  }
+
+  return (
+    <div className="card">
+      <div className="font-big">Human Verification</div>
+
+      <p className="font-medium" style={{ marginTop: 15 }}>
+        Web3 access requires proof you are human.
+      </p>
+
+      <p className="font-small">
+        reCAPTCHA + on-chain signature validation.
+      </p>
+
+      {!account ? (
+        <button className="button" onClick={connectWallet}>
+          Connect Wallet
+        </button>
+      ) : (
+        <button className="button" onClick={verifyHuman}>
+          Verify & Continue
+        </button>
+      )}
+
+      <p className="font-small" style={{ marginTop: 20 }}>
+        {status}
+      </p>
+    </div>
+  );
+}
