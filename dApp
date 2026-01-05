@@ -1,0 +1,14 @@
+Frontend (React)
+ ├─ reCAPTCHA (Google)
+ ├─ MetaMask
+ ├─ Neon UI
+ └─ Calls backend
+
+Backend (optional but recommended)
+ ├─ Verifies reCAPTCHA
+ └─ Signs proof (ECDSA)
+
+Smart Contract (Solidity)
+ ├─ verifyBySignature()
+ ├─ verifyPOW()
+ └─ isVerified()
