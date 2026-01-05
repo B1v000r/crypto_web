@@ -1,0 +1,9 @@
+// Global dApp configuration
+
+export const CONTRACT_ADDRESS = "YOUR_CONTRACT_ADDRESS";
+export const RECAPTCHA_SITE_KEY = "YOUR_SITE_KEY";
+
+export const CONTRACT_ABI = [
+  "function verifyBySignature(address,uint256,uint256,bytes)",
+  "function isVerified(address) view returns (bool)"
+];
