@@ -1,0 +1,5 @@
+src/
+ ├─ App.jsx
+ ├─ main.jsx
+ ├─ styles.css
+ └─ config.js
