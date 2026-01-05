@@ -1,0 +1,4 @@
+npm create vite@latest antibot-dapp -- --template react
+cd antibot-dapp
+npm install
+npm install ethers
