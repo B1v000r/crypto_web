@@ -1,0 +1,8 @@
+import crypto from "crypto";
+
+function hashIP(ip) {
+    return "0x" + crypto
+        .createHash("keccak256")
+        .update(ip)
+        .digest("hex");
+}
