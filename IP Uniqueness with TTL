@@ -1,0 +1,115 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+/*
+    IPUniquenessWithTTL
+    -------------------
+    This contract enforces IP uniqueness using hashed IP values.
+    Each IP hash can be reused only after a configurable TTL (time-to-live).
+    
+    IMPORTANT:
+    - Real IP addresses MUST be processed off-chain.
+    - Only keccak256(IP) hashes are allowed on-chain.
+*/
+
+contract IPUniquenessWithTTL {
+
+    // Stores the last usage timestamp for each IP hash
+    mapping(bytes32 => uint256) private ipLastUsedAt;
+
+    // Optional: bind last IP hash to a wallet address
+    mapping(address => bytes32) public addressToIP;
+
+    // Time window during which an IP cannot be reused
+    uint256 public ipTTL;
+
+    address public admin;
+
+    event IPRegistered(
+        address indexed user,
+        bytes32 indexed ipHash,
+        uint256 timestamp
+    );
+
+    event IPTTLUpdated(uint256 newTTL);
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    constructor(uint256 _ipTTLSeconds) {
+        require(_ipTTLSeconds > 0, "TTL must be positive");
+        admin = msg.sender;
+        ipTTL = _ipTTLSeconds;
+    }
+
+    /*
+        Registers an IP hash.
+        Reverts if the IP hash was used within the TTL window.
+    */
+    function registerIP(bytes32 ipHash) external {
+        require(ipHash != bytes32(0), "Invalid IP hash");
+
+        uint256 lastUsed = ipLastUsedAt[ipHash];
+
+        // Enforce TTL-based uniqueness
+        require(
+            lastUsed == 0 || block.timestamp >= lastUsed + ipTTL,
+            "IP reuse not allowed yet"
+        );
+
+        // Update usage timestamp
+        ipLastUsedAt[ipHash] = block.timestamp;
+
+        // Optionally bind IP to the sender address
+        addressToIP[msg.sender] = ipHash;
+
+        emit IPRegistered(msg.sender, ipHash, block.timestamp);
+    }
+
+    /*
+        Checks whether an IP hash can be used at the current time.
+    */
+    function isIPAvailable(bytes32 ipHash) external view returns (bool) {
+        uint256 lastUsed = ipLastUsedAt[ipHash];
+        return lastUsed == 0 || block.timestamp >= lastUsed + ipTTL;
+    }
+
+    /*
+        Returns the remaining cooldown time (in seconds) for an IP hash.
+        Returns 0 if the IP is available.
+    */
+    function ipCooldownRemaining(bytes32 ipHash) external view returns (uint256) {
+        uint256 lastUsed = ipLastUsedAt[ipHash];
+
+        if (lastUsed == 0) {
+            return 0;
+        }
+
+        uint256 unlockTime = lastUsed + ipTTL;
+
+        if (block.timestamp >= unlockTime) {
+            return 0;
+        }
+
+        return unlockTime - block.timestamp;
+    }
+
+    /*
+        Admin function to update the IP TTL value.
+    */
+    function setIPTTL(uint256 newTTL) external onlyAdmin {
+        require(newTTL > 0, "TTL must be positive");
+        ipTTL = newTTL;
+        emit IPTTLUpdated(newTTL);
+    }
+
+    /*
+        Transfers admin role.
+    */
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require(newAdmin != address(0), "Zero address");
+        admin = newAdmin;
+    }
+}
