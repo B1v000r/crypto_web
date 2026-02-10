@@ -1,0 +1,137 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+/*
+    IPWalletLimiter
+    ----------------
+    This contract limits the number of wallet addresses
+    that can register using the same IP hash.
+
+    Features:
+    - IP uniqueness via keccak256 hash (off-chain generated)
+    - Max wallets per IP
+    - Optional TTL (IP reuse cooldown)
+    - Privacy-safe (no raw IP stored)
+*/
+
+contract IPWalletLimiter {
+
+    address public admin;
+
+    // Maximum wallets allowed per IP
+    uint256 public maxWalletsPerIP;
+
+    // IP reuse cooldown (seconds)
+    uint256 public ipTTL;
+
+    // Tracks wallet count per IP
+    mapping(bytes32 => uint256) private ipWalletCount;
+
+    // Tracks last usage timestamp per IP
+    mapping(bytes32 => uint256) private ipLastUsedAt;
+
+    // Tracks which IP hash a wallet used
+    mapping(address => bytes32) public walletToIP;
+
+    event IPRegistered(
+        address indexed wallet,
+        bytes32 indexed ipHash,
+        uint256 timestamp
+    );
+
+    event LimitsUpdated(uint256 maxWallets, uint256 ttl);
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    constructor(uint256 _maxWalletsPerIP, uint256 _ipTTL) {
+        require(_maxWalletsPerIP > 0, "Max wallets must be > 0");
+
+        admin = msg.sender;
+        maxWalletsPerIP = _maxWalletsPerIP;
+        ipTTL = _ipTTL;
+    }
+
+    /*
+        Registers a wallet with an IP hash.
+        Reverts if:
+        - IP exceeded wallet limit
+        - IP is still in TTL cooldown
+        - Wallet already registered
+    */
+    function registerIP(bytes32 ipHash) external {
+        require(ipHash != bytes32(0), "Invalid IP hash");
+        require(walletToIP[msg.sender] == bytes32(0), "Wallet already registered");
+
+        uint256 lastUsed = ipLastUsedAt[ipHash];
+
+        // Enforce TTL if enabled
+        if (ipTTL > 0 && lastUsed != 0) {
+            require(
+                block.timestamp >= lastUsed + ipTTL,
+                "IP cooldown active"
+            );
+        }
+
+        // Enforce wallet limit per IP
+        require(
+            ipWalletCount[ipHash] < maxWalletsPerIP,
+            "IP wallet limit reached"
+        );
+
+        // Update state
+        ipWalletCount[ipHash] += 1;
+        ipLastUsedAt[ipHash] = block.timestamp;
+        walletToIP[msg.sender] = ipHash;
+
+        emit IPRegistered(msg.sender, ipHash, block.timestamp);
+    }
+
+    /*
+        Returns how many wallets are registered for an IP.
+    */
+    function walletsUsedByIP(bytes32 ipHash) external view returns (uint256) {
+        return ipWalletCount[ipHash];
+    }
+
+    /*
+        Checks whether an IP can register another wallet.
+    */
+    function canRegisterIP(bytes32 ipHash) external view returns (bool) {
+        if (ipWalletCount[ipHash] >= maxWalletsPerIP) {
+            return false;
+        }
+
+        if (ipTTL == 0) {
+            return true;
+        }
+
+        uint256 lastUsed = ipLastUsedAt[ipHash];
+        return lastUsed == 0 || block.timestamp >= lastUsed + ipTTL;
+    }
+
+    /*
+        Admin: update limits.
+    */
+    function updateLimits(uint256 newMaxWallets, uint256 newTTL)
+        external
+        onlyAdmin
+    {
+        require(newMaxWallets > 0, "Invalid max wallets");
+
+        maxWalletsPerIP = newMaxWallets;
+        ipTTL = newTTL;
+
+        emit LimitsUpdated(newMaxWallets, newTTL);
+    }
+
+    /*
+        Admin transfer.
+    */
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require(newAdmin != address(0), "Zero address");
+        admin = newAdmin;
+    }
+}
