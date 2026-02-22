@@ -1,0 +1,190 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+/*
+    IdentityLimiter
+    ----------------
+    Enforces uniqueness and limits using:
+
+    - IP hash (keccak256(IP))
+    - Device fingerprint hash (keccak256(deviceData))
+
+    Privacy-safe:
+    - No raw IP stored
+    - No raw fingerprint stored
+*/
+
+contract IdentityLimiter {
+
+    address public admin;
+
+    uint256 public ipTTL;
+    uint256 public deviceTTL;
+
+    uint256 public maxWalletsPerIP;
+    uint256 public maxWalletsPerDevice;
+
+    // Tracks usage counts
+    mapping(bytes32 => uint256) private ipWalletCount;
+    mapping(bytes32 => uint256) private deviceWalletCount;
+
+    // Tracks last usage timestamps
+    mapping(bytes32 => uint256) private ipLastUsedAt;
+    mapping(bytes32 => uint256) private deviceLastUsedAt;
+
+    // Wallet bindings
+    mapping(address => bytes32) public walletToIP;
+    mapping(address => bytes32) public walletToDevice;
+
+    event IdentityRegistered(
+        address indexed wallet,
+        bytes32 indexed ipHash,
+        bytes32 indexed deviceHash,
+        uint256 timestamp
+    );
+
+    event LimitsUpdated(
+        uint256 maxIP,
+        uint256 maxDevice,
+        uint256 ipTTL,
+        uint256 deviceTTL
+    );
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    constructor(
+        uint256 _maxWalletsPerIP,
+        uint256 _maxWalletsPerDevice,
+        uint256 _ipTTL,
+        uint256 _deviceTTL
+    ) {
+        require(_maxWalletsPerIP > 0, "Invalid IP limit");
+        require(_maxWalletsPerDevice > 0, "Invalid device limit");
+
+        admin = msg.sender;
+
+        maxWalletsPerIP = _maxWalletsPerIP;
+        maxWalletsPerDevice = _maxWalletsPerDevice;
+
+        ipTTL = _ipTTL;
+        deviceTTL = _deviceTTL;
+    }
+
+    /*
+        Registers identity using IP hash + Device hash
+
+        Reverts if:
+        - Wallet already registered
+        - IP limit exceeded
+        - Device limit exceeded
+        - TTL cooldown active
+    */
+    function registerIdentity(bytes32 ipHash, bytes32 deviceHash) external {
+
+        require(ipHash != bytes32(0), "Invalid IP hash");
+        require(deviceHash != bytes32(0), "Invalid device hash");
+
+        require(walletToIP[msg.sender] == bytes32(0), "Wallet already registered");
+
+        // ---- IP checks ----
+        uint256 ipLastUsed = ipLastUsedAt[ipHash];
+
+        if (ipTTL > 0 && ipLastUsed != 0) {
+            require(
+                block.timestamp >= ipLastUsed + ipTTL,
+                "IP cooldown active"
+            );
+        }
+
+        require(
+            ipWalletCount[ipHash] < maxWalletsPerIP,
+            "IP wallet limit reached"
+        );
+
+        // ---- Device checks ----
+        uint256 deviceLastUsed = deviceLastUsedAt[deviceHash];
+
+        if (deviceTTL > 0 && deviceLastUsed != 0) {
+            require(
+                block.timestamp >= deviceLastUsed + deviceTTL,
+                "Device cooldown active"
+            );
+        }
+
+        require(
+            deviceWalletCount[deviceHash] < maxWalletsPerDevice,
+            "Device wallet limit reached"
+        );
+
+        // ---- Update state ----
+        ipWalletCount[ipHash] += 1;
+        deviceWalletCount[deviceHash] += 1;
+
+        ipLastUsedAt[ipHash] = block.timestamp;
+        deviceLastUsedAt[deviceHash] = block.timestamp;
+
+        walletToIP[msg.sender] = ipHash;
+        walletToDevice[msg.sender] = deviceHash;
+
+        emit IdentityRegistered(
+            msg.sender,
+            ipHash,
+            deviceHash,
+            block.timestamp
+        );
+    }
+
+    /*
+        View helper: check if IP available
+    */
+    function canUseIP(bytes32 ipHash) external view returns (bool) {
+        if (ipWalletCount[ipHash] >= maxWalletsPerIP) return false;
+
+        if (ipTTL == 0) return true;
+
+        uint256 lastUsed = ipLastUsedAt[ipHash];
+        return lastUsed == 0 || block.timestamp >= lastUsed + ipTTL;
+    }
+
+    /*
+        View helper: check if device available
+    */
+    function canUseDevice(bytes32 deviceHash) external view returns (bool) {
+        if (deviceWalletCount[deviceHash] >= maxWalletsPerDevice) return false;
+
+        if (deviceTTL == 0) return true;
+
+        uint256 lastUsed = deviceLastUsedAt[deviceHash];
+        return lastUsed == 0 || block.timestamp >= lastUsed + deviceTTL;
+    }
+
+    /*
+        Admin: update limits
+    */
+    function updateLimits(
+        uint256 newMaxIP,
+        uint256 newMaxDevice,
+        uint256 newIPTTL,
+        uint256 newDeviceTTL
+    ) external onlyAdmin {
+
+        require(newMaxIP > 0, "Invalid IP limit");
+        require(newMaxDevice > 0, "Invalid device limit");
+
+        maxWalletsPerIP = newMaxIP;
+        maxWalletsPerDevice = newMaxDevice;
+
+        ipTTL = newIPTTL;
+        deviceTTL = newDeviceTTL;
+
+        emit LimitsUpdated(newMaxIP, newMaxDevice, newIPTTL, newDeviceTTL);
+    }
+
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require(newAdmin != address(0), "Zero address");
+        admin = newAdmin;
+    }
+}
