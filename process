@@ -1,0 +1,24 @@
+<?php
+session_start();
+
+// Check CSRF token
+if (!isset($_POST['token']) || $_POST['token'] !== $_SESSION['token']) {
+    die("Invalid request.");
+}
+
+// Validate email
+if (!filter_var($_POST['email'], FILTER_VALIDATE_EMAIL)) {
+    die("Invalid email address.");
+}
+
+$email = htmlspecialchars($_POST['email']);
+
+// Save email to file (simple lead storage)
+$file = fopen("leads.txt", "a");
+fwrite($file, $email . PHP_EOL);
+fclose($file);
+
+// Redirect to thank you page
+header("Location: thankyou.php");
+exit();
+?>
