@@ -1,14 +1,91 @@
+<?php
+// Simple session start for basic protection
+session_start();
+$_SESSION['token'] = bin2hex(random_bytes(32));
+?>
+
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>AntiBot dApp</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+<meta charset="UTF-8">
+<title>Crypto Insider Access</title>
 
-    <!-- Google reCAPTCHA v3 -->
-    <script src="https://www.google.com/recaptcha/api.js?render=YOUR_SITE_KEY"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<style>
+body {
+    background: #0f172a;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    padding: 60px;
+}
+
+.large-text {
+    font-size: 42px;
+    font-weight: bold;
+}
+
+.medium-text {
+    font-size: 22px;
+    margin-top: 20px;
+}
+
+.small-text {
+    font-size: 14px;
+    color: #94a3b8;
+    margin-top: 15px;
+}
+
+input[type="email"] {
+    padding: 15px;
+    width: 300px;
+    border-radius: 6px;
+    border: none;
+    margin-top: 25px;
+}
+
+button {
+    padding: 15px 25px;
+    background: #22c55e;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+button:hover {
+    background: #16a34a;
+}
+</style>
+</head>
+<body>
+
+<div class="large-text">
+🚀 Get Early Access to High-Potential Crypto Projects
+</div>
+
+<div class="medium-text">
+Join our private crypto subscriber list and receive:
+</div>
+
+<div class="small-text">
+✔ Early airdrop alerts<br>
+✔ DeFi opportunities<br>
+✔ Market alpha insights<br>
+✔ Web3 investment signals
+</div>
+
+<form action="process.php" method="POST">
+    <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
+    <br>
+    <input type="email" name="email" required placeholder="Enter your email">
+    <button type="submit">Join Now</button>
+</form>
+
+<div class="small-text">
+We respect your privacy. No spam. Unsubscribe anytime.
+</div>
+
+</body>
 </html>
