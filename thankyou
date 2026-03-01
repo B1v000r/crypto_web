@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Thank You</title>
+
+<style>
+body {
+    background: #0f172a;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    padding: 80px;
+}
+
+.large-text {
+    font-size: 40px;
+    font-weight: bold;
+}
+
+.medium-text {
+    font-size: 22px;
+    margin-top: 20px;
+}
+
+.small-text {
+    font-size: 14px;
+    margin-top: 15px;
+    color: #94a3b8;
+}
+
+a {
+    color: #22c55e;
+    text-decoration: none;
+}
+</style>
+</head>
+<body>
+
+<div class="large-text">
+🎉 You're In!
+</div>
+
+<div class="medium-text">
+Thank you for joining our Crypto Insider list.
+</div>
+
+<div class="small-text">
+Check your inbox for confirmation and upcoming crypto updates.
+</div>
+
+<div class="small-text">
+Meanwhile, follow us on Twitter and stay ahead of the market.
+</div>
+
+<br><br>
+<a href="index.php">← Back to Home</a>
+
+</body>
+</html>
