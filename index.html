@@ -1,5 +1,4 @@
 <?php
-// Simple session start for basic protection
 session_start();
 $_SESSION['token'] = bin2hex(random_bytes(32));
 ?>
@@ -10,82 +9,95 @@ $_SESSION['token'] = bin2hex(random_bytes(32));
 <meta charset="UTF-8">
 <title>Crypto Insider Access</title>
 
+<script src="https://www.google.com/recaptcha/api.js?render=YOUR_SITE_KEY"></script>
+
 <style>
+
 body {
-    background: #0f172a;
-    color: white;
-    font-family: Arial, sans-serif;
-    text-align: center;
-    padding: 60px;
+    background:#0f172a;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+    padding:60px;
 }
 
-.large-text {
-    font-size: 42px;
-    font-weight: bold;
-}
+.large-text { font-size:42px; font-weight:bold; }
+.medium-text { font-size:22px; margin-top:20px; }
+.small-text { font-size:14px; margin-top:15px; color:#94a3b8; }
 
-.medium-text {
-    font-size: 22px;
-    margin-top: 20px;
-}
-
-.small-text {
-    font-size: 14px;
-    color: #94a3b8;
-    margin-top: 15px;
-}
-
-input[type="email"] {
-    padding: 15px;
-    width: 300px;
-    border-radius: 6px;
-    border: none;
-    margin-top: 25px;
+input {
+    padding:15px;
+    width:300px;
+    border-radius:6px;
+    border:none;
+    margin-top:20px;
 }
 
 button {
-    padding: 15px 25px;
-    background: #22c55e;
-    border: none;
-    border-radius: 6px;
-    color: white;
-    font-weight: bold;
-    cursor: pointer;
-    margin-left: 10px;
+    padding:15px 25px;
+    background:#22c55e;
+    border:none;
+    border-radius:6px;
+    color:white;
+    cursor:pointer;
 }
 
-button:hover {
-    background: #16a34a;
-}
 </style>
 </head>
 <body>
 
 <div class="large-text">
-🚀 Get Early Access to High-Potential Crypto Projects
+🚀 Crypto Insider Access
 </div>
 
 <div class="medium-text">
-Join our private crypto subscriber list and receive:
+Join private crypto signals list
 </div>
 
-<div class="small-text">
-✔ Early airdrop alerts<br>
-✔ DeFi opportunities<br>
-✔ Market alpha insights<br>
-✔ Web3 investment signals
-</div>
+<form id="leadForm" action="process.php" method="POST">
 
-<form action="process.php" method="POST">
-    <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-    <br>
-    <input type="email" name="email" required placeholder="Enter your email">
-    <button type="submit">Join Now</button>
+<input type="hidden" name="token"
+value="<?php echo $_SESSION['token']; ?>">
+
+<input type="hidden" name="recaptcha_token" id="recaptchaToken">
+
+<br>
+
+<input type="email"
+name="email"
+required
+placeholder="Enter email">
+
+<br><br>
+
+<button type="submit">
+Join Now
+</button>
+
 </form>
 
 <div class="small-text">
-We respect your privacy. No spam. Unsubscribe anytime.
+No spam. Only crypto alpha.
 </div>
+
+<script>
+
+grecaptcha.ready(function() {
+
+    grecaptcha.execute(
+        'YOUR_SITE_KEY',
+        {action: 'submit'}
+    ).then(function(token) {
+
+        document.getElementById(
+            "recaptchaToken"
+        ).value = token;
+
+    });
+
+});
+
+</script>
 
 </body>
 </html>
