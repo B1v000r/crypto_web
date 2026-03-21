@@ -6,59 +6,67 @@ $_SESSION['token'] = bin2hex(random_bytes(32));
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
 <meta charset="UTF-8">
 <title>Crypto Insider Access</title>
 
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
 <script src="https://www.google.com/recaptcha/api.js?render=YOUR_SITE_KEY"></script>
 
 <style>
 
-body {
-    background:#0f172a;
-    color:white;
-    font-family:Arial;
-    text-align:center;
-    padding:60px;
+body{
+background:#0f172a;
+color:white;
+font-family:Arial;
+text-align:center;
+padding:60px;
 }
 
-.large-text { font-size:42px; font-weight:bold; }
-.medium-text { font-size:22px; margin-top:20px; }
-.small-text { font-size:14px; margin-top:15px; color:#94a3b8; }
+.large-text{font-size:42px;}
+.medium-text{font-size:22px;}
+.small-text{font-size:14px;}
 
-input {
-    padding:15px;
-    width:300px;
-    border-radius:6px;
-    border:none;
-    margin-top:20px;
+button{
+padding:12px 20px;
+margin:10px;
+background:#22c55e;
+border:none;
+color:white;
+cursor:pointer;
 }
 
-button {
-    padding:15px 25px;
-    background:#22c55e;
-    border:none;
-    border-radius:6px;
-    color:white;
-    cursor:pointer;
+input{
+padding:12px;
+width:300px;
 }
 
 </style>
+
 </head>
 <body>
 
 <div class="large-text">
-🚀 Crypto Insider Access
+Web3 Crypto Access
 </div>
 
 <div class="medium-text">
-Join private crypto signals list
+Connect wallet to join
 </div>
 
-<form id="leadForm" action="process.php" method="POST">
+<button onclick="connectWallet()">
+Connect Wallet
+</button>
+
+<div id="wallet"></div>
+
+<form id="leadForm" method="POST" action="process.php">
 
 <input type="hidden" name="token"
 value="<?php echo $_SESSION['token']; ?>">
 
+<input type="hidden" name="address" id="address">
+<input type="hidden" name="signature" id="signature">
 <input type="hidden" name="recaptcha_token" id="recaptchaToken">
 
 <br>
@@ -66,36 +74,92 @@ value="<?php echo $_SESSION['token']; ?>">
 <input type="email"
 name="email"
 required
-placeholder="Enter email">
+placeholder="Email">
 
 <br><br>
 
-<button type="submit">
-Join Now
+<button type="button"
+onclick="signAndSubmit()">
+
+Join
+
 </button>
 
 </form>
 
-<div class="small-text">
-No spam. Only crypto alpha.
-</div>
-
 <script>
 
-grecaptcha.ready(function() {
+let signer;
+let userAddress;
 
-    grecaptcha.execute(
-        'YOUR_SITE_KEY',
-        {action: 'submit'}
-    ).then(function(token) {
+async function connectWallet(){
 
-        document.getElementById(
-            "recaptchaToken"
-        ).value = token;
+if(!window.ethereum){
+alert("Install MetaMask");
+return;
+}
 
-    });
+const provider =
+new ethers.providers.Web3Provider(
+window.ethereum
+);
+
+await provider.send(
+"eth_requestAccounts", []
+);
+
+signer = provider.getSigner();
+
+userAddress =
+await signer.getAddress();
+
+document.getElementById(
+"wallet"
+).innerHTML = userAddress;
+
+document.getElementById(
+"address"
+).value = userAddress;
+
+}
+
+async function signAndSubmit(){
+
+if(!signer){
+alert("Connect wallet first");
+return;
+}
+
+const message =
+"Verify wallet for crypto access";
+
+const signature =
+await signer.signMessage(message);
+
+document.getElementById(
+"signature"
+).value = signature;
+
+grecaptcha.ready(function(){
+
+grecaptcha.execute(
+"YOUR_SITE_KEY",
+{action:"submit"}
+).then(function(token){
+
+document.getElementById(
+"recaptchaToken"
+).value = token;
+
+document.getElementById(
+"leadForm"
+).submit();
 
 });
+
+});
+
+}
 
 </script>
 
