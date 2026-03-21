@@ -4,70 +4,79 @@ session_start();
 
 $secret = "YOUR_SECRET_KEY";
 
-// CSRF check
-if (!isset($_POST['token']) ||
-$_POST['token'] !== $_SESSION['token']) {
+// CSRF
 
-    die("Invalid request");
-
+if ($_POST['token'] !== $_SESSION['token']) {
+    die("Bad token");
 }
 
-// Email validation
+// Email
+
 if (!filter_var(
     $_POST['email'],
     FILTER_VALIDATE_EMAIL
 )) {
-    die("Invalid email");
+    die("Bad email");
 }
 
 $email = $_POST['email'];
+$address = $_POST['address'];
+$signature = $_POST['signature'];
+
+if (!$address || !$signature) {
+    die("Wallet required");
+}
+
+// reCAPTCHA
 
 $recaptcha = $_POST['recaptcha_token'];
 
-// Verify with Google
-
-$url = "https://www.google.com/recaptcha/api/siteverify";
+$url =
+"https://www.google.com/recaptcha/api/siteverify";
 
 $data = [
-    'secret' => $secret,
-    'response' => $recaptcha
+"secret"=>$secret,
+"response"=>$recaptcha
 ];
 
 $options = [
-    'http' => [
-        'header' =>
-        "Content-type: application/x-www-form-urlencoded\r\n",
-        'method' => 'POST',
-        'content' => http_build_query($data)
-    ]
+"http"=>[
+"header" =>
+"Content-type: application/x-www-form-urlencoded",
+"method"=>"POST",
+"content"=>http_build_query($data)
+]
 ];
 
-$context = stream_context_create($options);
+$context =
+stream_context_create($options);
 
-$result = file_get_contents(
-    $url,
-    false,
-    $context
+$result =
+file_get_contents(
+$url,false,$context
 );
 
-$response = json_decode($result);
+$response =
+json_decode($result);
 
-// score check (v3)
+if(!$response->success
+|| $response->score < 0.5){
 
-if (!$response->success ||
-$response->score < 0.5) {
-
-    die("Bot detected");
-
+die("Bot");
 }
 
 // Save lead
 
-$file = fopen("leads.txt", "a");
-fwrite($file, $email . PHP_EOL);
-fclose($file);
+$file = fopen("leads.txt","a");
 
-// Redirect
+fwrite(
+$file,
+$email." | ".
+$address." | ".
+$signature."\n"
+);
+
+fclose($file);
 
 header("Location: thankyou.php");
 exit();
