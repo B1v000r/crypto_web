@@ -80,3 +80,27 @@ fclose($file);
 
 header("Location: thankyou.php");
 exit();
+
+
+// Call RPC to check isVerified
+
+$rpc = "https://rpc-url";
+
+$address = $_POST['address'];
+
+$data = [
+  "jsonrpc"=>"2.0",
+  "method"=>"eth_call",
+  "params"=>[
+    [
+      "to"=>"CONTRACT_ADDRESS",
+      "data"=>"ENCODED_isVerified_CALL"
+    ],
+    "latest"
+  ],
+  "id"=>1
+];
+
+// ⚠️ Упрощено: лучше делать через Node.js
+
+// If not verified → reject
