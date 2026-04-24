@@ -1,0 +1,13 @@
+async function beforeSubmit(){
+
+const hasNFT = await checkNFTAccess();
+
+if(!hasNFT){
+    return;
+}
+
+// continue flow
+signAndSubmit();
+
+}
+
