@@ -1,0 +1,29 @@
+async function checkNFTAccess(){
+
+const provider =
+new ethers.providers.Web3Provider(window.ethereum);
+
+const signer = provider.getSigner();
+
+const user =
+await signer.getAddress();
+
+const contract =
+new ethers.Contract(
+"NFT_CONTRACT_ADDRESS",
+NFT_ABI,
+provider
+);
+
+const balance =
+await contract.balanceOf(user);
+
+if(balance > 0){
+    console.log("ACCESS GRANTED");
+    return true;
+} else {
+    alert("You must own the NFT");
+    return false;
+}
+
+}
