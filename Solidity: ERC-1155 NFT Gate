@@ -1,0 +1,147 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+/*
+    ERC1155Gate
+    ------------
+    Access control using ERC-1155 token ownership.
+
+    Features:
+    - ERC-1155 support
+    - Token ID filtering
+    - Minimum balance requirement
+*/
+
+interface IERC1155 {
+
+    /*
+        Returns balance for token ID
+    */
+    function balanceOf(
+        address account,
+        uint256 id
+    ) external view returns (uint256);
+}
+
+contract ERC1155Gate {
+
+    address public admin;
+
+    // ERC-1155 collection address
+    address public tokenContract;
+
+    // Required token ID
+    uint256 public requiredTokenId;
+
+    // Minimum token amount required
+    uint256 public minimumBalance;
+
+    event GateUpdated(
+        address tokenContract,
+        uint256 tokenId,
+        uint256 minimumBalance
+    );
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    constructor(
+        address _tokenContract,
+        uint256 _tokenId,
+        uint256 _minimumBalance
+    ) {
+
+        require(
+            _tokenContract != address(0),
+            "Invalid contract"
+        );
+
+        require(
+            _minimumBalance > 0,
+            "Invalid minimum balance"
+        );
+
+        admin = msg.sender;
+
+        tokenContract = _tokenContract;
+        requiredTokenId = _tokenId;
+        minimumBalance = _minimumBalance;
+    }
+
+    /*
+        Returns true if wallet has enough ERC-1155 tokens
+    */
+    function hasAccess(address user)
+        public
+        view
+        returns (bool)
+    {
+
+        uint256 balance =
+            IERC1155(tokenContract)
+            .balanceOf(user, requiredTokenId);
+
+        return balance >= minimumBalance;
+    }
+
+    /*
+        Returns current balance for wallet
+    */
+    function getUserBalance(address user)
+        external
+        view
+        returns (uint256)
+    {
+
+        return IERC1155(tokenContract)
+            .balanceOf(user, requiredTokenId);
+    }
+
+    /*
+        Admin: update gate settings
+    */
+    function updateGate(
+        address newContract,
+        uint256 newTokenId,
+        uint256 newMinimumBalance
+    ) external onlyAdmin {
+
+        require(
+            newContract != address(0),
+            "Invalid contract"
+        );
+
+        require(
+            newMinimumBalance > 0,
+            "Invalid minimum"
+        );
+
+        tokenContract = newContract;
+        requiredTokenId = newTokenId;
+        minimumBalance = newMinimumBalance;
+
+        emit GateUpdated(
+            newContract,
+            newTokenId,
+            newMinimumBalance
+        );
+    }
+
+    /*
+        Transfer admin role
+    */
+    function transferAdmin(address newAdmin)
+        external
+        onlyAdmin
+    {
+
+        require(
+            newAdmin != address(0),
+            "Zero address"
+        );
+
+        admin = newAdmin;
+    }
+}
