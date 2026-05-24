@@ -6,3 +6,32 @@ function hashIP(ip) {
         .update(ip)
         .digest("hex");
 }
+
+
+import { ethers } from "ethers";
+
+const PRIVATE_KEY = "YOUR_SIGNER_KEY";
+
+const wallet = new ethers.Wallet(PRIVATE_KEY);
+
+export async function signIP(user, ipHash) {
+
+    const nonce = Math.floor(Math.random() * 1e9);
+    const expiry = Math.floor(Date.now() / 1000) + 3600;
+
+    const message = ethers.solidityPackedKeccak256(
+        ["address","bytes32","uint256","uint256","address"],
+        [user, ipHash, nonce, expiry, CONTRACT_ADDRESS]
+    );
+
+    const signature = await wallet.signMessage(
+        ethers.getBytes(message)
+    );
+
+    return {
+        ipHash,
+        nonce,
+        expiry,
+        signature
+    };
+}
