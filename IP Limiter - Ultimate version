@@ -1,0 +1,168 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.17;
+
+/*
+    IPLimiterOracle
+    ----------------
+    Advanced IP limiter using oracle-signed messages.
+
+    Features:
+    - IP uniqueness via hash
+    - Max wallets per IP
+    - TTL cooldown
+    - Signature validation (anti-spoof)
+*/
+
+contract IPLimiterOracle {
+
+    address public admin;
+    address public trustedSigner;
+
+    uint256 public maxWalletsPerIP;
+    uint256 public ipTTL;
+
+    // IP → wallet count
+    mapping(bytes32 => uint256) public ipWalletCount;
+
+    // IP → last usage
+    mapping(bytes32 => uint256) public ipLastUsed;
+
+    // Wallet → used flag
+    mapping(address => bool) public walletUsed;
+
+    // Nonce replay protection
+    mapping(uint256 => bool) public usedNonces;
+
+    event Verified(
+        address indexed user,
+        bytes32 indexed ipHash,
+        uint256 timestamp
+    );
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    constructor(
+        address _signer,
+        uint256 _maxWallets,
+        uint256 _ttl
+    ) {
+        admin = msg.sender;
+        trustedSigner = _signer;
+        maxWalletsPerIP = _maxWallets;
+        ipTTL = _ttl;
+    }
+
+    /*
+        Main verification function
+
+        Backend signs:
+        keccak256(user, ipHash, nonce, expiry, contract)
+    */
+    function verifyIP(
+        address user,
+        bytes32 ipHash,
+        uint256 nonce,
+        uint256 expiry,
+        bytes calldata signature
+    ) external {
+
+        require(!walletUsed[user], "Wallet already used");
+        require(!usedNonces[nonce], "Nonce used");
+        require(block.timestamp <= expiry, "Expired");
+
+        // ---- Recreate signed message ----
+        bytes32 message = keccak256(
+            abi.encodePacked(user, ipHash, nonce, expiry, address(this))
+        );
+
+        bytes32 ethSigned = keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                message
+            )
+        );
+
+        address recovered = recover(ethSigned, signature);
+
+        require(recovered == trustedSigner, "Invalid signer");
+
+        // ---- IP rules ----
+        require(
+            ipWalletCount[ipHash] < maxWalletsPerIP,
+            "IP limit reached"
+        );
+
+        uint256 lastUsed = ipLastUsed[ipHash];
+
+        if (ipTTL > 0 && lastUsed != 0) {
+            require(
+                block.timestamp >= lastUsed + ipTTL,
+                "IP cooldown"
+            );
+        }
+
+        // ---- Update state ----
+        walletUsed[user] = true;
+        usedNonces[nonce] = true;
+
+        ipWalletCount[ipHash] += 1;
+        ipLastUsed[ipHash] = block.timestamp;
+
+        emit Verified(user, ipHash, block.timestamp);
+    }
+
+    /*
+        Check if wallet already verified
+    */
+    function isVerified(address user)
+        external
+        view
+        returns (bool)
+    {
+        return walletUsed[user];
+    }
+
+    /*
+        Recover signer
+    */
+    function recover(bytes32 hash, bytes memory sig)
+        internal
+        pure
+        returns (address)
+    {
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+
+        assembly {
+            r := mload(add(sig,32))
+            s := mload(add(sig,64))
+            v := byte(0, mload(add(sig,96)))
+        }
+
+        if (v < 27) v += 27;
+
+        return ecrecover(hash, v, r, s);
+    }
+
+    /*
+        Admin update
+    */
+    function updateLimits(uint256 maxWallets, uint256 ttl)
+        external
+        onlyAdmin
+    {
+        maxWalletsPerIP = maxWallets;
+        ipTTL = ttl;
+    }
+
+    function setSigner(address signer)
+        external
+        onlyAdmin
+    {
+        trustedSigner = signer;
+    }
+}
