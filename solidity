@@ -3,6 +3,113 @@ pragma solidity ^0.8.0;
 
 /// @title AntiBotGate — простой модуль защиты от ботов (POW + rate limit + oracle signature)
 /// @author
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+/*
+    IP Limiter
+
+    Backend:
+    1. Gets real user IP
+    2. Creates ipHash = keccak256(IP)
+    3. Signs approval message
+    4. Frontend sends signature to contract
+
+    Contract:
+    - verifies signer
+    - limits wallets per IP
+    - prevents replay attacks
+*/
+
+contract IPLimiter {
+
+    address public immutable trustedSigner;
+
+    uint256 public constant MAX_WALLETS_PER_IP = 3;
+
+    mapping(bytes32 => uint256) public ipUsageCount;
+    mapping(uint256 => bool) public usedNonce;
+
+    event IPVerified(
+        address indexed user,
+        bytes32 indexed ipHash
+    );
+
+    constructor(address _trustedSigner) {
+        trustedSigner = _trustedSigner;
+    }
+
+    function verifyIP(
+        bytes32 ipHash,
+        uint256 nonce,
+        uint256 expiresAt,
+        bytes calldata signature
+    ) external {
+
+        require(block.timestamp <= expiresAt, "Signature expired");
+        require(!usedNonce[nonce], "Nonce already used");
+
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                msg.sender,
+                ipHash,
+                nonce,
+                expiresAt,
+                address(this)
+            )
+        );
+
+        bytes32 ethSignedMessageHash =
+            keccak256(
+                abi.encodePacked(
+                    "\x19Ethereum Signed Message:\n32",
+                    messageHash
+                )
+            );
+
+        require(
+            recoverSigner(
+                ethSignedMessageHash,
+                signature
+            ) == trustedSigner,
+            "Invalid signature"
+        );
+
+        require(
+            ipUsageCount[ipHash] < MAX_WALLETS_PER_IP,
+            "IP limit reached"
+        );
+
+        usedNonce[nonce] = true;
+        ipUsageCount[ipHash]++;
+
+        emit IPVerified(msg.sender, ipHash);
+    }
+
+    function recoverSigner(
+        bytes32 hash,
+        bytes memory sig
+    ) internal pure returns (address) {
+
+        require(sig.length == 65, "Bad signature");
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
+        }
+
+        if (v < 27) {
+            v += 27;
+        }
+
+        return ecrecover(hash, v, r, s);
+    }
+}
 /// @notice Пример для интеграции в dApp: перед выполнением "чувствительного" действия вызывайте require(isVerified(msg.sender))
 contract AntiBotGate {
     // --- state ---
