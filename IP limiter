@@ -1,0 +1,18 @@
+const ipHash = keccak256(ipAddress);
+
+const message = solidityPackedKeccak256(
+    [
+        "address",
+        "bytes32",
+        "uint256",
+        "uint256",
+        "address"
+    ],
+    [
+        userAddress,
+        ipHash,
+        nonce,
+        expiresAt,
+        contractAddress
+    ]
+);
