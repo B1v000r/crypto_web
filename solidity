@@ -244,3 +244,113 @@ contract AntiBotGate {
         return ecrecover(ethSignedMessageHash, v, r, s);
     }
 }
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+/*
+    NFT + Token Gate
+
+    Access is granted if:
+    - User owns enough ERC20 tokens
+    OR
+    - User owns at least one ERC721 NFT
+*/
+
+interface IERC20 {
+    function balanceOf(address account)
+        external
+        view
+        returns (uint256);
+}
+
+interface IERC721 {
+    function balanceOf(address owner)
+        external
+        view
+        returns (uint256);
+}
+
+contract NFTTokenGate {
+
+    address public admin;
+
+    IERC20 public token;
+    IERC721 public nft;
+
+    uint256 public minTokenBalance;
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only admin");
+        _;
+    }
+
+    constructor(
+        address tokenAddress,
+        address nftAddress,
+        uint256 minimumTokens
+    ) {
+        admin = msg.sender;
+
+        token = IERC20(tokenAddress);
+        nft = IERC721(nftAddress);
+
+        minTokenBalance = minimumTokens;
+    }
+
+    /*
+        Returns true if user satisfies
+        token OR NFT requirement
+    */
+    function hasAccess(
+        address user
+    ) public view returns (bool) {
+
+        bool tokenHolder =
+            token.balanceOf(user) >= minTokenBalance;
+
+        bool nftHolder =
+            nft.balanceOf(user) > 0;
+
+        return tokenHolder || nftHolder;
+    }
+
+    /*
+        Returns detailed access info
+    */
+    function accessInfo(
+        address user
+    )
+        external
+        view
+        returns (
+            bool access,
+            uint256 tokenBalance,
+            uint256 nftBalance
+        )
+    {
+        tokenBalance = token.balanceOf(user);
+        nftBalance = nft.balanceOf(user);
+
+        access =
+            tokenBalance >= minTokenBalance ||
+            nftBalance > 0;
+    }
+
+    function updateToken(
+        address newToken
+    ) external onlyAdmin {
+        token = IERC20(newToken);
+    }
+
+    function updateNFT(
+        address newNFT
+    ) external onlyAdmin {
+        nft = IERC721(newNFT);
+    }
+
+    function updateMinBalance(
+        uint256 newBalance
+    ) external onlyAdmin {
+        minTokenBalance = newBalance;
+    }
+}
