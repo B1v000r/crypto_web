@@ -1,0 +1,120 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+/*
+    Merkle Airdrop
+
+    Features:
+    - One claim per wallet
+    - Merkle proof verification
+    - Admin can update the Merkle root
+    - Gas-efficient allowlist
+*/
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+
+contract MerkleAirdrop is Ownable {
+
+    using SafeERC20 for IERC20;
+
+    IERC20 public immutable token;
+
+    bytes32 public merkleRoot;
+
+    mapping(address => bool) public hasClaimed;
+
+    event Claimed(
+        address indexed account,
+        uint256 amount
+    );
+
+    event MerkleRootUpdated(
+        bytes32 newRoot
+    );
+
+    constructor(
+        address tokenAddress,
+        bytes32 initialRoot
+    ) Ownable(msg.sender) {
+        token = IERC20(tokenAddress);
+        merkleRoot = initialRoot;
+    }
+
+    /*
+        Claim allocated tokens.
+
+        Leaf format:
+        keccak256(abi.encodePacked(account, amount))
+    */
+
+    function claim(
+        uint256 amount,
+        bytes32[] calldata proof
+    ) external {
+
+        require(
+            !hasClaimed[msg.sender],
+            "Already claimed"
+        );
+
+        bytes32 leaf =
+            keccak256(
+                abi.encodePacked(
+                    msg.sender,
+                    amount
+                )
+            );
+
+        require(
+            MerkleProof.verify(
+                proof,
+                merkleRoot,
+                leaf
+            ),
+            "Invalid proof"
+        );
+
+        hasClaimed[msg.sender] = true;
+
+        token.safeTransfer(
+            msg.sender,
+            amount
+        );
+
+        emit Claimed(
+            msg.sender,
+            amount
+        );
+    }
+
+    /*
+        Update allowlist.
+    */
+
+    function setMerkleRoot(
+        bytes32 newRoot
+    ) external onlyOwner {
+
+        merkleRoot = newRoot;
+
+        emit MerkleRootUpdated(
+            newRoot
+        );
+    }
+
+    /*
+        View contract balance.
+    */
+
+    function remainingTokens()
+        external
+        view
+        returns(uint256)
+    {
+        return token.balanceOf(
+            address(this)
+        );
+    }
+}
