@@ -1,0 +1,57 @@
+// Global rate limit configuration
+uint256 public maxVerificationsPerWindow = 100;
+uint256 public rateLimitWindow = 1 hours;
+
+// Current rate limit window
+uint256 public windowStart;
+uint256 public verificationCount;
+
+event RateLimitUpdated(
+    uint256 maxVerifications,
+    uint256 windowDuration
+);
+
+modifier globalRateLimit() {
+    // Start a new window when the current one expires
+    if (block.timestamp >= windowStart + rateLimitWindow) {
+        windowStart = block.timestamp;
+        verificationCount = 0;
+    }
+
+    require(
+        verificationCount < maxVerificationsPerWindow,
+        "Global rate limit reached"
+    );
+
+    verificationCount++;
+    _;
+}
+
+function verifyIP(
+    bytes32 ipHash,
+    uint256 nonce,
+    uint256 expiresAt,
+    bytes calldata signature
+)
+    external
+    globalRateLimit
+{
+    // Existing verification logic
+}
+
+function updateRateLimit(
+    uint256 maxVerifications,
+    uint256 windowDuration
+) external onlyAdmin {
+
+    require(maxVerifications > 0, "Invalid limit");
+    require(windowDuration > 0, "Invalid window");
+
+    maxVerificationsPerWindow = maxVerifications;
+    rateLimitWindow = windowDuration;
+
+    emit RateLimitUpdated(
+        maxVerifications,
+        windowDuration
+    );
+}
