@@ -34,7 +34,27 @@ contract IPLimiter {
         address indexed user,
         bytes32 indexed ipHash
     );
+bool public paused;
 
+event GatePaused();
+event GateUnpaused();
+
+modifier whenNotPaused() {
+    require(!paused, "Gate is paused");
+    _;
+}
+
+function pause() external onlyAdmin {
+    require(!paused, "Already paused");
+    paused = true;
+    emit GatePaused();
+}
+
+function unpause() external onlyAdmin {
+    require(paused, "Not paused");
+    paused = false;
+    emit GateUnpaused();
+}
     constructor(address _trustedSigner) {
         trustedSigner = _trustedSigner;
     }
