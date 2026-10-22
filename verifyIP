@@ -1,0 +1,8 @@
+function verifyIP(
+    bytes32 ipHash,
+    uint256 nonce,
+    uint256 expiresAt,
+    bytes calldata signature
+) external whenNotPaused globalRateLimit {
+    // Existing verification logic
+}
