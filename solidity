@@ -374,3 +374,63 @@ contract NFTTokenGate {
         minTokenBalance = newBalance;
     }
 }
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+
+abstract contract GateProofVerifier is EIP712 {
+    using ECDSA for bytes32;
+
+    bytes32 private constant PROOF_TYPEHASH = keccak256(
+        "GateProof(address wallet,bytes32 ipHash,uint256 nonce,uint256 deadline)"
+    );
+
+    address public oracleSigner;
+
+    mapping(address => mapping(uint256 => bool)) public usedNonces;
+
+    event ProofVerified(address indexed wallet, uint256 nonce);
+
+    constructor(address signer) EIP712("UltimateGate", "1") {
+        require(signer != address(0), "Invalid signer");
+        oracleSigner = signer;
+    }
+
+    function _verifyProof(
+        address wallet,
+        bytes32 ipHash,
+        uint256 nonce,
+        uint256 deadline,
+        bytes calldata signature
+    ) internal {
+        require(msg.sender == wallet, "Wrong wallet");
+        require(block.timestamp <= deadline, "Proof expired");
+        require(!usedNonces[wallet][nonce], "Proof already used");
+
+        bytes32 structHash = keccak256(
+            abi.encode(
+                PROOF_TYPEHASH,
+                wallet,
+                ipHash,
+                nonce,
+                deadline
+            )
+        );
+
+        bytes32 digest = _hashTypedDataV4(structHash);
+
+        address recoveredSigner = ECDSA.recover(
+            digest,
+            signature
+        );
+
+        require(recoveredSigner == oracleSigner, "Invalid signature");
+
+        usedNonces[wallet][nonce] = true;
+
+        emit ProofVerified(wallet, nonce);
+    }
+}
