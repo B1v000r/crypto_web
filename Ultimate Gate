@@ -1,0 +1,16 @@
+function verifyIP(
+    bytes32 ipHash,
+    uint256 nonce,
+    uint256 deadline,
+    bytes calldata signature
+) external whenNotPaused globalRateLimit {
+    _verifyProof(
+        msg.sender,
+        ipHash,
+        nonce,
+        deadline,
+        signature
+    );
+
+    // Existing IP verification and cooldown logic
+}
